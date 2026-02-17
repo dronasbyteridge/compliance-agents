@@ -1,0 +1,13 @@
+openai
+openai-agents
+pandas
+python-dotenv
+pydantic
+faiss-cpu
+PyPDF2
+sentence-transformers
+gradio
+fastapi
+uvicorn
+mysql-connector-python
+matplotlib
