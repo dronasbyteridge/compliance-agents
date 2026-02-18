@@ -11,3 +11,4 @@ fastapi
 uvicorn
 mysql-connector-python
 matplotlib
+numpy

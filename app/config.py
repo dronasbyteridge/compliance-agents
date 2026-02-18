@@ -68,6 +68,12 @@ MYSQL_CONFIG = {
     "port": int(os.getenv("MYSQL_PORT", 3306)),
 }
 
+# ==============================
+# Feature flags
+# ==============================
+NOTIFICATION_ENABLED = os.getenv("NOTIFICATION_ENABLED", "true").lower() == "true"
+AUTO_EXECUTE_ACTIONS = os.getenv("AUTO_EXECUTE_ACTIONS", "false").lower() == "true"
+
 
 def get_llm_openai_client():
     """

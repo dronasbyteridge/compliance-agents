@@ -1,0 +1,353 @@
+# Sample Legislation Content for PDF
+
+This file contains sample legislation text that should be converted to PDF and placed in data/sample_legislation.pdf
+
+---
+
+## GERMANY - SOCIAL SECURITY CONTRIBUTION REGULATION 2024
+
+### Regulation ID: DE-SSC-2024-001
+### Effective Date: April 1, 2024
+### Category: Social Security Contributions
+
+**Summary:**
+The Federal Ministry of Labor and Social Affairs announces changes to employer social security contribution rates effective April 1, 2024.
+
+**Current Rate:** 18.0% of gross salary
+**New Rate:** 22.0% of gross salary
+**Rate Increase:** 4.0 percentage points
+
+**Scope:**
+This regulation applies to all employers with employees based in Germany. The contribution rate applies to gross annual salary for all active employees.
+
+**Implementation Requirements:**
+- Employers must update payroll systems by March 15, 2024
+- First payroll run with new rate: April 2024
+- Retroactive adjustments not required
+- Employee notification required within 30 days
+
+**Compliance Deadline:** March 31, 2024
+**Enforcement:** Immediate upon effective date
+**Penalties:** Up to €50,000 for non-compliance
+
+**Background:**
+This increase supports the national pension system and healthcare infrastructure improvements. The rate adjustment aligns Germany with EU average contribution levels.
+
+**Contact:**
+Federal Ministry of Labor and Social Affairs
+compliance@bmas.bund.de
++49 30 18527-0
+
+---
+
+## FRANCE - PENSION CONTRIBUTION AMENDMENT 2024
+
+### Regulation ID: FR-PEN-2024-002
+### Effective Date: June 1, 2024
+### Category: Pension Contributions
+
+**Summary:**
+The French Ministry of Economy and Finance announces an increase in mandatory employer pension contribution rates.
+
+**Current Rate:** 15.0% of gross salary
+**New Rate:** 17.0% of gross salary
+**Rate Increase:** 2.0 percentage points
+
+**Scope:**
+Applies to all employers with employees in France. Mandatory for all employment contracts including full-time, part-time, and fixed-term contracts.
+
+**Implementation Timeline:**
+- Announcement: March 1, 2024
+- Preparation Period: March 1 - May 31, 2024
+- Effective Date: June 1, 2024
+- First application: June 2024 payroll
+
+**Compliance Requirements:**
+- Update payroll configuration
+- Notify employees by May 15, 2024
+- Submit compliance confirmation to URSSAF
+- Maintain documentation for 5 years
+
+**Financial Impact:**
+For an employee earning €60,000 annually:
+- Old contribution: €9,000
+- New contribution: €10,200
+- Annual increase: €1,200
+
+**Penalties:**
+- Late implementation: €10,000 + 5% monthly interest
+- Non-compliance: Up to €100,000
+- Repeated violations: Criminal prosecution possible
+
+**Rationale:**
+This increase addresses the aging population and ensures long-term pension system sustainability. France aims to maintain pension adequacy while managing demographic challenges.
+
+**Authority:**
+Ministry of Economy and Finance
+Direction de la Sécurité Sociale
+pension.compliance@finances.gouv.fr
+
+---
+
+## UNITED KINGDOM - NATIONAL INSURANCE ADJUSTMENT 2024
+
+### Regulation ID: UK-NI-2024-003
+### Effective Date: May 1, 2024
+### Category: National Insurance
+
+**Summary:**
+HM Revenue & Customs announces adjustment to employer National Insurance contribution rates for the 2024/2025 tax year.
+
+**Current Rate:** 12.0% of gross salary
+**New Rate:** 13.5% of gross salary
+**Rate Increase:** 1.5 percentage points
+
+**Scope:**
+Applies to all UK employers for employees earning above the National Insurance threshold (£12,570 annually).
+
+**Implementation Details:**
+- Effective: May 1, 2024
+- Applies to: All employees above NI threshold
+- Calculation: On earnings above £12,570
+- Payment: Monthly via PAYE system
+
+**Employer Obligations:**
+1. Update payroll software by April 25, 2024
+2. Notify employees of changes
+3. Submit updated RTI (Real Time Information) to HMRC
+4. Maintain accurate records
+5. File annual compliance report
+
+**Example Calculation:**
+Employee earning £50,000:
+- Taxable amount: £50,000 - £12,570 = £37,430
+- Old NI: £37,430 × 12.0% = £4,491.60
+- New NI: £37,430 × 13.5% = £5,053.05
+- Annual increase: £561.45
+
+**Compliance Deadline:** April 30, 2024
+**Late Filing Penalty:** £100 initial + £10 per day
+**Non-compliance:** Up to £10,000 fine + interest
+
+**Policy Context:**
+This adjustment supports NHS funding and social care improvements. The increase is part of the government's commitment to healthcare investment.
+
+**Contact:**
+HM Revenue & Customs
+National Insurance Contributions Office
+nic.compliance@hmrc.gov.uk
+0300 200 3500
+
+---
+
+## GERMANY - ADDITIONAL SOCIAL CONTRIBUTION DETAILS
+
+### Historical Context
+Germany's social security system has evolved significantly:
+- 2020: 17.5%
+- 2021: 17.8%
+- 2022: 18.0%
+- 2023: 18.0%
+- 2024: 22.0% (new)
+
+### Breakdown of Contributions
+The 22% employer contribution covers:
+- Pension insurance: 9.3%
+- Health insurance: 7.3%
+- Unemployment insurance: 2.6%
+- Long-term care insurance: 1.5%
+- Accident insurance: 1.3%
+
+### Industry-Specific Considerations
+Some industries may have additional requirements:
+- Manufacturing: Standard rate applies
+- Technology: Standard rate applies
+- Healthcare: May qualify for partial exemptions
+- Education: Standard rate applies
+
+### Regional Variations
+While the federal rate is 22%, some Länder may have supplementary contributions:
+- Bavaria: +0.5% for regional programs
+- North Rhine-Westphalia: Standard rate
+- Baden-Württemberg: Standard rate
+
+---
+
+## FRANCE - PENSION SYSTEM OVERVIEW
+
+### Pension System Structure
+France operates a multi-pillar pension system:
+1. Basic state pension (régime de base)
+2. Supplementary pension (régime complémentaire)
+3. Additional voluntary savings
+
+### Contribution Distribution
+The 17% employer contribution is allocated:
+- CNAV (basic pension): 8.55%
+- AGIRC-ARRCO (supplementary): 6.01%
+- CEG (death benefit): 1.50%
+- APEC (executive pension): 0.94%
+
+### Employee Contributions
+In addition to employer contributions, employees contribute:
+- Basic pension: 6.90%
+- Supplementary: 3.15%
+- Total employee: 10.05%
+
+### Retirement Age
+- Legal retirement age: 62 years
+- Full pension age: 67 years
+- Early retirement: Possible with reduced benefits
+
+---
+
+## UK - NATIONAL INSURANCE CATEGORIES
+
+### NI Categories
+Different rates apply to different employee categories:
+- Category A: Standard employees (13.5%)
+- Category B: Married women (reduced rate)
+- Category C: Employees over state pension age (0%)
+- Category D: Apprentices under 25 (0% up to threshold)
+
+### Thresholds 2024/2025
+- Lower Earnings Limit: £6,396
+- Primary Threshold: £12,570
+- Upper Earnings Limit: £50,270
+- Above UEL: Additional 2% rate
+
+### Payment Schedule
+Employers must pay NI:
+- Monthly: By 22nd of following month
+- Quarterly: For small employers (<£1,500/month)
+- Annually: Not permitted for PAYE
+
+---
+
+## COMPLIANCE BEST PRACTICES
+
+### For All Jurisdictions
+
+**1. Preparation Phase**
+- Review current payroll configuration
+- Identify impacted employees
+- Calculate financial impact
+- Prepare budget adjustments
+- Update payroll software
+
+**2. Implementation Phase**
+- Test payroll calculations
+- Update employee records
+- Process first payroll with new rates
+- Verify calculations
+- Generate compliance reports
+
+**3. Post-Implementation**
+- Monitor for errors
+- Address employee questions
+- Maintain audit trail
+- File required reports
+- Schedule compliance review
+
+**4. Documentation**
+- Keep all regulatory notices
+- Maintain calculation worksheets
+- Store employee notifications
+- Archive system change logs
+- Retain for statutory period
+
+**5. Risk Management**
+- Assess compliance risk
+- Identify potential issues
+- Develop mitigation strategies
+- Establish escalation procedures
+- Regular compliance audits
+
+---
+
+## FREQUENTLY ASKED QUESTIONS
+
+**Q: Do these rates apply to contractors?**
+A: Generally no, these rates apply to employees. Contractor arrangements may have different requirements.
+
+**Q: What about remote workers?**
+A: Rates typically apply based on employee location, not company location. Consult local regulations.
+
+**Q: Are there exemptions for small businesses?**
+A: Some jurisdictions offer reduced rates or exemptions for small employers. Check specific regulations.
+
+**Q: How do I handle employees in multiple countries?**
+A: Each country's rates apply to employees based in that country. Separate calculations required.
+
+**Q: What if I miss the deadline?**
+A: Contact the relevant authority immediately. Penalties may be reduced for voluntary disclosure.
+
+**Q: Can I phase in the increase?**
+A: No, the full rate must be applied from the effective date unless specifically permitted.
+
+**Q: How do I calculate retroactive payments?**
+A: If required, calculate the difference between old and new rates for the retroactive period.
+
+**Q: What records must I keep?**
+A: Maintain all payroll records, calculations, employee notifications, and compliance confirmations.
+
+---
+
+## REGULATORY AUTHORITY CONTACTS
+
+### Germany
+**Federal Ministry of Labor and Social Affairs**
+- Website: www.bmas.de
+- Email: compliance@bmas.bund.de
+- Phone: +49 30 18527-0
+- Address: Wilhelmstraße 49, 10117 Berlin
+
+### France
+**Ministry of Economy and Finance**
+- Website: www.economie.gouv.fr
+- Email: pension.compliance@finances.gouv.fr
+- Phone: +33 1 40 04 04 04
+- Address: 139 Rue de Bercy, 75012 Paris
+
+### United Kingdom
+**HM Revenue & Customs**
+- Website: www.gov.uk/hmrc
+- Email: nic.compliance@hmrc.gov.uk
+- Phone: 0300 200 3500
+- Address: 100 Parliament Street, London SW1A 2BQ
+
+---
+
+## APPENDIX: CALCULATION EXAMPLES
+
+### Example 1: Germany - Single Employee
+- Employee: Software Engineer
+- Annual Salary: €75,000
+- Old Rate: 18% = €13,500
+- New Rate: 22% = €16,500
+- Annual Increase: €3,000
+- Monthly Increase: €250
+
+### Example 2: France - Multiple Employees
+- Team of 5 employees
+- Average Salary: €65,000
+- Old Total: €48,750 (15%)
+- New Total: €55,250 (17%)
+- Annual Increase: €6,500
+- Per Employee: €1,300
+
+### Example 3: UK - Department
+- Department: 10 employees
+- Total Payroll: £600,000
+- Taxable: £600,000 - (10 × £12,570) = £474,300
+- Old NI: £56,916 (12%)
+- New NI: £64,030.50 (13.5%)
+- Annual Increase: £7,114.50
+
+---
+
+**Document Version:** 1.0
+**Last Updated:** March 1, 2024
+**Next Review:** September 1, 2024
+
+**Disclaimer:** This document is for informational purposes only and does not constitute legal advice. Employers should consult with legal and tax professionals for specific guidance.

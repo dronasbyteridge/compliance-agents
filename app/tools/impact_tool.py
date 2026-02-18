@@ -30,13 +30,15 @@ def calculate_impact(country: str, new_rate: float, legislation_id: int):
             old_rate = float(emp["pension_rate"])
             salary = float(emp["annual_salary"])
 
-            if old_rate != new_rate:
+            # Calculate the change
+            old_contribution = salary * old_rate
+            new_contribution = salary * new_rate
+            increase = new_contribution - old_contribution
+
+            # Only count as impacted if there's an actual increase (cost goes up)
+            # If increase is negative or zero, skip this employee
+            if increase > 0:
                 impacted_count += 1
-
-                old_contribution = salary * old_rate
-                new_contribution = salary * new_rate
-                increase = new_contribution - old_contribution
-
                 total_cost_increase += increase
 
                 # Insert employee impact detail
