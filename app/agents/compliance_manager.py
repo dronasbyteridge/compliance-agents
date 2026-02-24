@@ -11,6 +11,7 @@ from app.agents.legal_agent import legal_agent
 from app.agents.payroll_agent import payroll_agent
 from app.agents.risk_agent import risk_agent
 from app.agents.urgency_agent import urgency_agent
+from app.schemas.urgency_agent_output_schema import UrgencyAgentOutput
 from app.agents.report_agent import report_agent
 from app.agents.action_execution_agent import action_execution_agent
 from app.db.db import get_db
@@ -216,21 +217,26 @@ async def run_compliance_flow_async(user_input: str):
                 days_until_effective = 30  # Default assumption
 
         urgency_input = f"""
-        Effective Date: {effective_date}
-        Days Until Effective: {days_until_effective}
+        Effective Date: {effective_date.strftime('%Y-%m-%d') if hasattr(effective_date, 'strftime') else effective_date}
+        Risk Level: {risk_data.risk_level}
         Impacted Employees: {impacted_count}
         Annual Cost Increase: {annual_cost}
-        Risk Level: {risk_data.risk_level}
-        Country: {country}
+        Legal Summary: {summary}
         """
 
         urgency_result = await Runner.run(
             urgency_agent,
             input=[{"role": "user", "content": urgency_input}],
         )
-        urgency_raw = urgency_result.final_output_as(str)
-        urgency_json = json.loads(urgency_raw)
-        urgency_conf = float(urgency_json.get("confidence", 0.7))
+        urgency_data = urgency_result.final_output_as(UrgencyAgentOutput)
+        urgency_conf = float(urgency_data.confidence)
+
+        print(f"\n[DEBUG] Urgency Agent Output:")
+        print(f"  Urgency Level: {urgency_data.urgency_level}")
+        print(f"  Days Until Effective: {urgency_data.days_until_effective}")
+        print(f"  Recommended Action: {urgency_data.recommended_action}")
+        print(f"  Reasoning: {urgency_data.reasoning}")
+        print(f"  Confidence: {urgency_data.confidence}")
 
         # ==================================================
         # 8️⃣ Report Generation Agent
@@ -243,7 +249,7 @@ async def run_compliance_flow_async(user_input: str):
         Impacted Employees: {impacted_count}
         Annual Cost Increase: {annual_cost}
         Risk Level: {risk_data.risk_level}
-        Urgency: {urgency_json.get('urgency_level')}
+        Urgency: {urgency_data.urgency_level}
         Days Until Effective: {days_until_effective}
         Payroll Action Required: {payroll_action_required}
         Risk Reasoning: {risk_reasoning}
@@ -309,9 +315,9 @@ RECOMMENDED ACTIONS:
 {action_summary}
 
 URGENCY ASSESSMENT:
-Level: {urgency_json.get('urgency_level', '')}
-Timeline: {urgency_json.get('recommended_action_timeline', '')}
-Reasoning: {urgency_json.get('reasoning', '')}
+Level: {urgency_data.urgency_level}
+Recommended Action: {urgency_data.recommended_action}
+Reasoning: {urgency_data.reasoning}
 """
 
         # ==================================================
@@ -327,11 +333,9 @@ Reasoning: {urgency_json.get('reasoning', '')}
             "annual_cost_increase": annual_cost,
             "monthly_cost_increase": round(annual_cost / 12, 2) if annual_cost else 0,
             "payroll_urgency": payroll_data.urgency,
-            "urgency_level": urgency_json.get("urgency_level"),
-            "urgency_reasoning": urgency_json.get("reasoning"),
-            "recommended_action_timeline": urgency_json.get(
-                "recommended_action_timeline"
-            ),
+            "urgency_level": urgency_data.urgency_level,
+            "urgency_reasoning": urgency_data.reasoning,
+            "recommended_action_timeline": urgency_data.recommended_action,
             "risk_level": risk_data.risk_level,
             "confidence": final_conf,
             "employee_rows": employee_rows,
