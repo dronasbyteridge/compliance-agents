@@ -1,54 +1,51 @@
 from app.config import LLM_MODEL  # ensures env config is applied before `agents` loads
 from agents import Agent
-from app.db.db import get_db
-import json
+from app.schemas.risk_agent_output_schema import RiskAgentOutput
+from app.tools.log_risk_to_db import log_risk_to_db
 
+
+RISK_AGENT_INSTRUCTIONS = """
+**Context:**
+You are a payroll compliance risk classification agent.
+
+Your role is to assess the operational and regulatory impact of a payroll-related legal change.
+
+**Instruction:**
+Based on the provided compliance information, classify the overall risk level and provide a short justification.
+
+Risk levels must reflect operational impact:
+
+- Low → Minimal operational disruption
+- Medium → Moderate configuration or compliance impact
+- High → Significant compliance, financial, or legal exposure risk
+
+Do not make unsupported assumptions.
+Base your classification only on the provided information.
+
+**Input:**
+A structured or unstructured description of a payroll-related legal or regulatory change.
+
+**Output:**
+Return ONLY a valid JSON object containing:
+
+- risk_level (must be one of: "Low", "Medium", "High")
+- reasoning (short explanation)
+- confidence (numeric value between 0 and 1)
+
+**Rules:**
+1. Return ONLY valid JSON.
+2. Do NOT include explanations, commentary, or markdown.
+3. Do NOT wrap the response in backticks.
+4. risk_level must strictly be "Low", "Medium", or "High".
+5. confidence must be a numeric value between 0 and 1.
+6. The output must be directly parseable by a Pydantic model.
+7. If a Legislation ID is provided in the input, call the log_risk_to_db tool with that ID, the risk_level, and the reasoning before returning your final output.
+"""
 
 risk_agent = Agent(
     name="RiskAgent",
-    instructions="""
-You are a payroll compliance risk classifier.
-
-Classify compliance risk as:
-- Low
-- Medium
-- High
-
-Return STRICT JSON only in this format:
-
-{
-  "risk_level": "Low/Medium/High",
-  "reasoning": "Short explanation",
-  "confidence": 0.0
-}
-
-Rules:
-- confidence must be between 0 and 1
-- Do NOT add extra text
-""",
-    model=LLM_MODEL
+    instructions=RISK_AGENT_INSTRUCTIONS,
+    model=LLM_MODEL,
+    output_type=RiskAgentOutput,
+    tools=[log_risk_to_db],
 )
-
-
-def log_risk_to_db(legislation_id: int, risk_json: dict):
-    """
-    Persist risk classification into compliance_audit table.
-    Automatically escalate if High.
-    """
-
-    risk_level = risk_json.get("risk_level")
-    reasoning = risk_json.get("reasoning")
-
-    escalated = True if risk_level == "High" else False
-
-    with get_db() as (conn, cursor):
-        cursor.execute("""
-            INSERT INTO compliance_audit
-            (legislation_id, action_taken, risk_level, escalated)
-            VALUES (%s, %s, %s, %s)
-        """, (
-            legislation_id,
-            reasoning,
-            risk_level,
-            escalated
-        ))
