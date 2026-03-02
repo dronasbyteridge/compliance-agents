@@ -106,7 +106,11 @@ def load_vector_store():
 # Query RAG
 # ==============================
 
-def query_rag(query: str, top_k: int = 3) -> str:
+def query_rag(query: str, top_k: int = 5) -> str:
+    """
+    Query the RAG system and return relevant legislation context.
+    Returns raw context chunks for the legal agent to parse.
+    """
     index, chunks = load_vector_store()
 
     query_embedding = embedding_model.encode([query])
@@ -114,29 +118,10 @@ def query_rag(query: str, top_k: int = 3) -> str:
 
     distances, indices = index.search(query_embedding, top_k)
 
-    retrieved_context = "\n\n".join([chunks[i] for i in indices[0]])
-
-    prompt = f"""
-You are a legal compliance assistant.
-
-Use the provided context to answer the question.
-
-Context:
-{retrieved_context}
-
-Question:
-{query}
-
-Answer clearly and professionally.
-"""
-
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[
-            {"role": "system", "content": "You are a financial compliance expert."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.2,
-    )
-
-    return response.choices[0].message.content.strip()
+    # Return raw context for legal agent to parse
+    retrieved_context = "\n\n".join([chunks[i] for i in indices[0] if i < len(chunks)])
+    
+    print(f"\n[RAG] Retrieved {len(indices[0])} chunks for query: {query[:50]}...")
+    print(f"[RAG] First chunk preview: {retrieved_context[:200]}...")
+    
+    return retrieved_context

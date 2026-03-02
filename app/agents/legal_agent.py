@@ -6,15 +6,22 @@ legal_agent = Agent(
     instructions="""
 You are a payroll legal compliance expert.
 
-From the given legislative text extract:
+From the given legislative text or query, extract compliance information.
 
-- Country
-- Effective date
-- Previous rate (if mentioned)
-- New rate (if mentioned)
-- Policy category
+IMPORTANT: Look for rate information in BOTH the query AND the context:
+- If the query mentions a specific rate (e.g., "22%", "35%", "0.22"), use that rate
+- If the context mentions rates, use those
+- Rates can be expressed as percentages (22%) or decimals (0.22)
+- Convert all rates to decimal format (e.g., 22% = 0.22, 5% = 0.05)
 
-Return STRICT JSON:
+Extract:
+- Country (e.g., "Germany", "France", "UK")
+- Effective date (YYYY-MM-DD format, estimate if not exact)
+- Previous rate (as decimal, e.g., 0.18 for 18%)
+- New rate (as decimal, e.g., 0.22 for 22%)
+- Policy category (e.g., "pension", "social_security", "national_insurance")
+
+Return STRICT JSON (no markdown, no extra text):
 
 {
   "country": "",
@@ -27,8 +34,10 @@ Return STRICT JSON:
 }
 
 Rules:
-- No extra text
-- confidence between 0 and 1
+- No markdown formatting, just pure JSON
+- confidence between 0 and 1 (0.7-0.9 for clear info, 0.5-0.7 for inferred)
+- If rate is mentioned as percentage, convert to decimal
+- If effective date is "next month", estimate based on current date
 """,
     model=LLM_MODEL
 )

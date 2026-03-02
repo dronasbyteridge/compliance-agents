@@ -39,9 +39,17 @@ async def run_compliance_flow_async(user_input: str):
         # ==================================================
         # 2️⃣ Legal Interpretation Agent
         # ==================================================
+        # Pass both the RAG context AND the original query to help extract rates
+        legal_input = f"""
+Original Query: {user_input}
+
+Legislative Context:
+{rag_context}
+"""
+        
         legal_result = await Runner.run(
             legal_agent,
-            input=[{"role": "user", "content": rag_context}],
+            input=[{"role": "user", "content": legal_input}],
         )
         legal_raw = legal_result.final_output_as(str)
         legal_json = json.loads(legal_raw)
