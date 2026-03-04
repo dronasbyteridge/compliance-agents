@@ -227,20 +227,24 @@ Or simply say "run default simulation" to use current values.
                 history.append({"role": "assistant", "content": response})
                 return response, history, None, fig
         
-        # New compliance query - check for compliance-related keywords OR if no current analysis
+        # New compliance query - check for compliance-related keywords
         # This ensures any query about rates, countries, dates, etc. triggers analysis
         compliance_keywords = [
             "compliance", "regulation", "law", "rate", "contribution", "pension", "social",
             "germany", "france", "uk", "united kingdom", "effective", "increase", "decrease",
-            "change", "april", "march", "june", "january", "%", "percent", "2026", "2025", "2024"
+            "change", "april", "march", "june", "january", "%", "percent", "2026", "2025", "2024",
+            "analyze", "analysis"
         ]
         
-        is_compliance_query = (
-            any(word in message_lower for word in compliance_keywords) or
-            not self.current_analysis  # If no analysis yet, treat as new query
-        )
+        # Check if this looks like a new compliance query (not a follow-up command)
+        is_new_compliance_query = any(word in message_lower for word in compliance_keywords)
+        is_followup_command = any(word in message_lower for word in [
+            "show", "display", "execute", "run", "simulate", "detail", "employee", 
+            "chart", "graph", "visual", "help"
+        ])
         
-        if is_compliance_query and not self.current_analysis:
+        # Trigger new analysis if it's a compliance query and NOT a follow-up command
+        if is_new_compliance_query and not is_followup_command:
             return self._analyze_compliance(message, history)
         
         # Help and general queries

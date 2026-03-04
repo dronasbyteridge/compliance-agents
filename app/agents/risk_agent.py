@@ -1,4 +1,4 @@
-from app.config import LLM_MODEL  # ensures env config is applied before `agents` loads
+from app.config import LLM_MODEL, LLM_PROVIDER
 from agents import Agent
 from app.schemas.risk_agent_output_schema import RiskAgentOutput
 from app.tools.log_risk_to_db import log_risk_to_db
@@ -35,17 +35,28 @@ Return ONLY a valid JSON object containing:
 **Rules:**
 1. Return ONLY valid JSON.
 2. Do NOT include explanations, commentary, or markdown.
-3. Do NOT wrap the response in backticks.
+3. Do NOT wrap the response in backticks or markdown code blocks.
 4. risk_level must strictly be "Low", "Medium", or "High".
 5. confidence must be a numeric value between 0 and 1.
 6. The output must be directly parseable by a Pydantic model.
 7. If a Legislation ID is provided in the input, call the log_risk_to_db tool with that ID, the risk_level, and the reasoning before returning your final output.
 """
 
-risk_agent = Agent(
-    name="RiskAgent",
-    instructions=RISK_AGENT_INSTRUCTIONS,
-    model=LLM_MODEL,
-    output_type=RiskAgentOutput,
-    tools=[log_risk_to_db],
-)
+# Conditional structured output based on provider
+if LLM_PROVIDER == "openai":
+    risk_agent = Agent(
+        name="RiskAgent",
+        instructions=RISK_AGENT_INSTRUCTIONS,
+        model=LLM_MODEL,
+        output_type=RiskAgentOutput,
+        tools=[log_risk_to_db],
+    )
+else:
+    # Groq and other providers
+    risk_agent = Agent(
+        name="RiskAgent",
+        instructions=RISK_AGENT_INSTRUCTIONS,
+        model=LLM_MODEL,
+        tools=[log_risk_to_db],
+    )
+

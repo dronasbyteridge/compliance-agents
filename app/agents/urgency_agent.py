@@ -1,4 +1,4 @@
-from app.config import LLM_MODEL  # ensures env config is applied before `agents` loads
+from app.config import LLM_MODEL, LLM_PROVIDER
 from agents import Agent
 from app.schemas.urgency_agent_output_schema import UrgencyAgentOutput
 from app.tools.calculate_days_until_effective import calculate_days_until_effective
@@ -58,16 +58,27 @@ Return ONLY a valid JSON object containing:
 4. urgency_level must strictly match the tool's returned urgency_level.
 5. days_until_effective must be the integer returned by the tool.
 6. Do NOT include explanations, commentary, or markdown.
-7. Do NOT wrap the response in backticks.
+7. Do NOT wrap the response in backticks or markdown code blocks.
 8. confidence must be a float between 0.0 and 1.0.
 9. The output must be directly parseable by a Pydantic model.
 """
 
-urgency_agent = Agent(
-    name="UrgencyAgent",
-    instructions=URGENCY_AGENT_INSTRUCTIONS,
-    model=LLM_MODEL,
-    output_type=UrgencyAgentOutput,
-    tools=[calculate_days_until_effective],
-)
+# Conditional structured output based on provider
+if LLM_PROVIDER == "openai":
+    urgency_agent = Agent(
+        name="UrgencyAgent",
+        instructions=URGENCY_AGENT_INSTRUCTIONS,
+        model=LLM_MODEL,
+        output_type=UrgencyAgentOutput,
+        tools=[calculate_days_until_effective],
+    )
+else:
+    # Groq and other providers
+    urgency_agent = Agent(
+        name="UrgencyAgent",
+        instructions=URGENCY_AGENT_INSTRUCTIONS,
+        model=LLM_MODEL,
+        tools=[calculate_days_until_effective],
+    )
+
 

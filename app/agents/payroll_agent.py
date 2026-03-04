@@ -1,4 +1,4 @@
-from app.config import LLM_MODEL  # ensures env config is applied before `agents` loads
+from app.config import LLM_MODEL, LLM_PROVIDER
 from agents import Agent
 from app.schemas.payroll_agent_output_schema import PayrollAgentOutput
 
@@ -34,17 +34,26 @@ Return ONLY a valid JSON object containing:
 **Rules:**
 1. Return ONLY valid JSON.
 2. Do NOT include explanations, commentary, or markdown.
-3. Do NOT wrap the response in backticks.
+3. Do NOT wrap the response in backticks or markdown code blocks.
 4. All boolean fields must be true or false (not strings).
 5. Urgency must strictly be one of: "Low", "Medium", "High".
 6. Confidence must be a numeric value between 0 and 1.
 7. The output must be directly parseable by a Pydantic model.
 """
 
+# Conditional structured output based on provider
+if LLM_PROVIDER == "openai":
+    payroll_agent = Agent(
+        name="PayrollAgent",
+        instructions=PAYROLL_AGENT_INSTRUCTIONS,
+        model=LLM_MODEL,
+        output_type=PayrollAgentOutput,
+    )
+else:
+    # Groq and other providers
+    payroll_agent = Agent(
+        name="PayrollAgent",
+        instructions=PAYROLL_AGENT_INSTRUCTIONS,
+        model=LLM_MODEL,
+    )
 
-payroll_agent = Agent(
-    name="PayrollAgent",
-    instructions=PAYROLL_AGENT_INSTRUCTIONS,
-    model=LLM_MODEL,
-    output_type=PayrollAgentOutput,
-)

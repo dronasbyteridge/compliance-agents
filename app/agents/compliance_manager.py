@@ -1,6 +1,7 @@
 import json
 import asyncio
 import pandas as pd
+import re
 from datetime import datetime, timedelta
 from app.rag.rag_engine import query_rag
 from app.schemas.legal_compliance_output_schema import LegalComplianceOutput
@@ -9,13 +10,38 @@ from app.schemas.risk_agent_output_schema import RiskAgentOutput
 from app.tools.impact_tool import calculate_impact
 from app.agents.legal_agent import legal_agent
 from app.agents.payroll_agent import payroll_agent
-from app.agents.risk_agent import risk_agent
+from app.agents.risk_agent import risk_agent, log_risk_to_db
 from app.agents.urgency_agent import urgency_agent
 from app.schemas.urgency_agent_output_schema import UrgencyAgentOutput
 from app.agents.report_agent import report_agent
 from app.agents.action_execution_agent import action_execution_agent
 from app.db.db import get_db
 from agents import Runner
+from app.config import LLM_PROVIDER
+
+
+def parse_agent_json_output(raw_output: str, agent_name: str = "Agent") -> dict:
+    """
+    Parse JSON output from agents, handling both structured (OpenAI) and plain text (Groq) responses.
+    Removes markdown code blocks and extra characters if present.
+    """
+    try:
+        # Remove markdown code blocks if present
+        cleaned = re.sub(r'```json\s*', '', raw_output)
+        cleaned = re.sub(r'```\s*', '', cleaned)
+        # Remove extra < > characters that some models add
+        cleaned = re.sub(r'^<\s*', '', cleaned)
+        cleaned = re.sub(r'\s*>$', '', cleaned)
+        cleaned = cleaned.strip()
+        
+        result = json.loads(cleaned)
+        print(f"[DEBUG] {agent_name}: Successfully parsed JSON output")
+        return result
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] {agent_name}: Failed to parse JSON: {e}")
+        print(f"[ERROR] {agent_name}: Raw output: {raw_output[:500]}")
+        return {}
+
 
 
 async def run_compliance_flow_async(user_input: str):
@@ -56,10 +82,53 @@ Legislative Context:
             input=[{"role": "user", "content": legal_input}],
         )
 
-        legal_data = legal_result.final_output_as(LegalComplianceOutput)
+        # Handle both structured output (OpenAI) and plain JSON (Groq)
+        from app.config import LLM_PROVIDER
+        
+        if LLM_PROVIDER == "openai":
+            # OpenAI returns structured Pydantic object
+            legal_data = legal_result.final_output_as(LegalComplianceOutput)
+            legal_json = {
+                "country": legal_data.country,
+                "effective_date": legal_data.effective_date,
+                "previous_rate": legal_data.previous_rate,
+                "new_rate": legal_data.new_rate,
+                "category": legal_data.category,
+                "summary": legal_data.summary,
+                "confidence": legal_data.confidence
+            }
+        else:
+            # Groq and others return plain JSON string
+            legal_raw = legal_result.final_output_as(str)
+            
+            # Remove markdown code blocks if present
+            import re
+            legal_raw_cleaned = re.sub(r'```json\s*', '', legal_raw)
+            legal_raw_cleaned = re.sub(r'```\s*', '', legal_raw_cleaned)
+            legal_raw_cleaned = legal_raw_cleaned.strip()
+            
+            try:
+                legal_json = json.loads(legal_raw_cleaned)
+                print(f"[DEBUG] Successfully parsed legal agent response as JSON")
+            except json.JSONDecodeError as e:
+                print(f"[ERROR] Failed to parse legal agent response as JSON: {e}")
+                print(f"[ERROR] Raw response: {legal_raw[:500]}")
+                # Return empty result if parsing fails
+                return {
+                    "summary": f"Error parsing legal response: {str(e)}",
+                    "country": "",
+                    "new_rate": 0,
+                    "impacted_employees": 0,
+                    "annual_cost_increase": 0,
+                    "payroll_urgency": "",
+                    "risk_level": "",
+                    "confidence": 0,
+                    "employee_rows": [],
+                    "csv_path": None
+                }
 
-        country = legal_data.country
-        raw_new_rate = float(legal_data.new_rate)
+        country = legal_json.get("country", "")
+        raw_new_rate = float(legal_json.get("new_rate", 0))
 
         # The legal agent may return rates either as percentages (e.g. 5 for 5%)
         # or as decimals (e.g. 0.05). We normalize to:
@@ -77,8 +146,8 @@ Legislative Context:
         print(f"  Normalized decimal (for calculations): {new_rate_decimal}")
         print(f"  Display rate (for UI): {display_new_rate}%")
 
-        summary = legal_data.summary
-        legal_conf = float(legal_data.confidence)
+        summary = legal_json.get("summary", "")
+        legal_conf = float(legal_json.get("confidence", 0.7))
 
         # ==================================================
         # 3️⃣ Payroll Agent
@@ -93,19 +162,33 @@ Legislative Context:
             payroll_agent,
             input=[{"role": "user", "content": payroll_input}],
         )
-        payroll_data = payroll_result.final_output_as(PayrollAgentOutput)
+        
+        # Handle both OpenAI (structured) and Groq (plain JSON) responses
+        if LLM_PROVIDER == "openai":
+            payroll_data = payroll_result.final_output_as(PayrollAgentOutput)
+            payroll_json = {
+                "payroll_action_required": payroll_data.payroll_action_required,
+                "requires_system_update": payroll_data.requires_system_update,
+                "employee_recalculation_required": payroll_data.employee_recalculation_required,
+                "urgency": payroll_data.urgency,
+                "confidence": payroll_data.confidence
+            }
+        else:
+            payroll_raw = payroll_result.final_output_as(str)
+            payroll_json = parse_agent_json_output(payroll_raw, "PayrollAgent")
 
-        payroll_conf = float(payroll_data.confidence)
-        payroll_action_required = payroll_data.payroll_action_required
-        requires_system_update = payroll_data.requires_system_update
-        employee_recalculation_required = payroll_data.employee_recalculation_required
+        payroll_conf = float(payroll_json.get("confidence", 0.7))
+        payroll_action_required = payroll_json.get("payroll_action_required", "")
+        requires_system_update = payroll_json.get("requires_system_update", False)
+        employee_recalculation_required = payroll_json.get("employee_recalculation_required", False)
 
         print(f"\n[DEBUG] Payroll Agent Output:")
         print(f"  Action Required: {payroll_action_required}")
         print(f"  Requires System Update: {requires_system_update}")
         print(f"  Employee Recalculation Required: {employee_recalculation_required}")
         print(f"  Confidence: {payroll_conf}")
-        print(f"  Urgency: {payroll_data.urgency}")
+        print(f"  Urgency: {payroll_json.get('urgency', 'N/A')}")
+
 
         # ==================================================
         # 4️⃣ Fetch Latest Legislation ID from DB
@@ -140,8 +223,8 @@ Legislative Context:
                         "auto_detected",
                         0,
                         new_rate_decimal,
-                        legal_data.effective_date,
-                        legal_data.category,
+                        legal_json.get('effective_date', '2024-01-01'),
+                        legal_json.get('category', 'General'),
                         summary,
                     ),
                 )
@@ -187,7 +270,7 @@ Legislative Context:
         risk_input = f"""
         Legal Summary: {summary}
         New Rate (%): {display_new_rate}
-        Payroll Urgency: {payroll_data.urgency}
+        Payroll Urgency: {payroll_json.get('urgency', 'Medium')}
         Impacted Employees: {impacted_count}
         Annual Cost Increase: {annual_cost}
         Legislation ID: {legislation_id if legislation_id else "NOT AVAILABLE - do not call log_risk_to_db"}
@@ -197,12 +280,24 @@ Legislative Context:
             risk_agent,
             input=[{"role": "user", "content": risk_input}],
         )
-        risk_data = risk_result.final_output_as(RiskAgentOutput)
-        risk_conf = float(risk_data.confidence)
-        risk_reasoning = risk_data.reasoning
+        
+        # Handle both OpenAI (structured) and Groq (plain JSON) responses
+        if LLM_PROVIDER == "openai":
+            risk_data = risk_result.final_output_as(RiskAgentOutput)
+            risk_json = {
+                "risk_level": risk_data.risk_level,
+                "reasoning": risk_data.reasoning,
+                "confidence": risk_data.confidence
+            }
+        else:
+            risk_raw = risk_result.final_output_as(str)
+            risk_json = parse_agent_json_output(risk_raw, "RiskAgent")
+        
+        risk_conf = float(risk_json.get("confidence", 0.7))
+        risk_reasoning = risk_json.get("reasoning", "")
 
         print(f"\n[DEBUG] Risk Agent Output:")
-        print(f"  Risk Level: {risk_data.risk_level}")
+        print(f"  Risk Level: {risk_json.get('risk_level', 'N/A')}")
         print(f"  Reasoning: {risk_reasoning}")
         print(f"  Confidence: {risk_conf}")
         print(
@@ -210,11 +305,17 @@ Legislative Context:
         )
 
         # DB logging is handled by the risk agent via the log_risk_to_db tool
+        # For Groq, we need to manually log since tools might not execute properly
+        if LLM_PROVIDER != "openai" and legislation_id:
+            try:
+                log_risk_to_db(legislation_id, risk_json)
+            except Exception as e:
+                print(f"[ERROR] Manual risk logging failed: {e}")
 
         # ==================================================
         # 7️⃣ Urgency Classification Agent
         # ==================================================
-        effective_date = legal_data.effective_date
+        effective_date = legal_json.get("effective_date", "")
         days_until_effective = 0
 
         if effective_date:
@@ -226,7 +327,7 @@ Legislative Context:
 
         urgency_input = f"""
         Effective Date: {effective_date.strftime('%Y-%m-%d') if hasattr(effective_date, 'strftime') else effective_date}
-        Risk Level: {risk_data.risk_level}
+        Risk Level: {risk_json.get('risk_level', 'Medium')}
         Impacted Employees: {impacted_count}
         Annual Cost Increase: {annual_cost}
         Legal Summary: {summary}
@@ -236,15 +337,29 @@ Legislative Context:
             urgency_agent,
             input=[{"role": "user", "content": urgency_input}],
         )
-        urgency_data = urgency_result.final_output_as(UrgencyAgentOutput)
-        urgency_conf = float(urgency_data.confidence)
+        
+        # Handle both OpenAI (structured) and Groq (plain JSON) responses
+        if LLM_PROVIDER == "openai":
+            urgency_data = urgency_result.final_output_as(UrgencyAgentOutput)
+            urgency_json = {
+                "urgency_level": urgency_data.urgency_level,
+                "reasoning": urgency_data.reasoning,
+                "recommended_action": urgency_data.recommended_action,
+                "confidence": urgency_data.confidence
+            }
+        else:
+            urgency_raw = urgency_result.final_output_as(str)
+            urgency_json = parse_agent_json_output(urgency_raw, "UrgencyAgent")
+        
+        urgency_conf = float(urgency_json.get("confidence", 0.7))
 
         print(f"\n[DEBUG] Urgency Agent Output:")
-        print(f"  Urgency Level: {urgency_data.urgency_level}")
-        print(f"  Days Until Effective: {urgency_data.days_until_effective}")
-        print(f"  Recommended Action: {urgency_data.recommended_action}")
-        print(f"  Reasoning: {urgency_data.reasoning}")
-        print(f"  Confidence: {urgency_data.confidence}")
+        print(f"  Urgency Level: {urgency_json.get('urgency_level', 'N/A')}")
+        print(f"  Days Until Effective: {urgency_json.get('days_until_effective', days_until_effective)}")
+        print(f"  Recommended Action: {urgency_json.get('recommended_action', 'N/A')}")
+        print(f"  Reasoning: {urgency_json.get('reasoning', 'N/A')}")
+        print(f"  Confidence: {urgency_json.get('confidence', 0.7)}")
+
 
         # ==================================================
         # 8️⃣ Report Generation Agent
@@ -256,8 +371,8 @@ Legislative Context:
         Effective Date: {effective_date}
         Impacted Employees: {impacted_count}
         Annual Cost Increase: {annual_cost}
-        Risk Level: {risk_data.risk_level}
-        Urgency: {urgency_data.urgency_level}
+        Risk Level: {risk_json.get('risk_level', 'Medium')}
+        Urgency: {urgency_json.get('urgency_level', 'Medium')}
         Days Until Effective: {days_until_effective}
         Payroll Action Required: {payroll_action_required}
         Risk Reasoning: {risk_reasoning}
@@ -323,9 +438,9 @@ RECOMMENDED ACTIONS:
 {action_summary}
 
 URGENCY ASSESSMENT:
-Level: {urgency_data.urgency_level}
-Recommended Action: {urgency_data.recommended_action}
-Reasoning: {urgency_data.reasoning}
+Level: {urgency_json.get('urgency_level', 'N/A')}
+Recommended Action: {urgency_json.get('recommended_action', 'N/A')}
+Reasoning: {urgency_json.get('reasoning', 'N/A')}
 """
 
         # ==================================================
@@ -340,11 +455,11 @@ Reasoning: {urgency_data.reasoning}
             "impacted_employees": impacted_count,
             "annual_cost_increase": annual_cost,
             "monthly_cost_increase": round(annual_cost / 12, 2) if annual_cost else 0,
-            "payroll_urgency": payroll_data.urgency,
-            "urgency_level": urgency_data.urgency_level,
-            "urgency_reasoning": urgency_data.reasoning,
-            "recommended_action_timeline": urgency_data.recommended_action,
-            "risk_level": risk_data.risk_level,
+            "payroll_urgency": payroll_json.get("urgency", "Medium"),
+            "urgency_level": urgency_json.get("urgency_level", "Medium"),
+            "urgency_reasoning": urgency_json.get("reasoning", ""),
+            "recommended_action_timeline": urgency_json.get("recommended_action", ""),
+            "risk_level": risk_json.get("risk_level", "Medium"),
             "confidence": final_conf,
             "employee_rows": employee_rows,
             "csv_path": csv_path,
@@ -363,6 +478,14 @@ Reasoning: {urgency_data.reasoning}
         }
 
     except Exception as e:
+        print(f"\n{'='*60}")
+        print(f"❌ EXCEPTION IN COMPLIANCE FLOW:")
+        print(f"{'='*60}")
+        print(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print(f"{'='*60}\n")
+        
         return {
             "summary": f"Error: {str(e)}",
             "country": "",
