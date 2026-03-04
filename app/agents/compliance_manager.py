@@ -3,11 +3,15 @@ import asyncio
 import pandas as pd
 from datetime import datetime, timedelta
 from app.rag.rag_engine import query_rag
+from app.schemas.legal_compliance_output_schema import LegalComplianceOutput
+from app.schemas.payroll_agent_output_schema import PayrollAgentOutput
+from app.schemas.risk_agent_output_schema import RiskAgentOutput
 from app.tools.impact_tool import calculate_impact
 from app.agents.legal_agent import legal_agent
 from app.agents.payroll_agent import payroll_agent
-from app.agents.risk_agent import risk_agent, log_risk_to_db
+from app.agents.risk_agent import risk_agent
 from app.agents.urgency_agent import urgency_agent
+from app.schemas.urgency_agent_output_schema import UrgencyAgentOutput
 from app.agents.report_agent import report_agent
 from app.agents.action_execution_agent import action_execution_agent
 from app.db.db import get_db
@@ -33,7 +37,7 @@ async def run_compliance_flow_async(user_input: str):
                 "risk_level": "",
                 "confidence": 0,
                 "employee_rows": [],
-                "csv_path": None
+                "csv_path": None,
             }
 
         # ==================================================
@@ -51,11 +55,11 @@ Legislative Context:
             legal_agent,
             input=[{"role": "user", "content": legal_input}],
         )
-        legal_raw = legal_result.final_output_as(str)
-        legal_json = json.loads(legal_raw)
 
-        country = legal_json.get("country", "")
-        raw_new_rate = float(legal_json.get("new_rate", 0))
+        legal_data = legal_result.final_output_as(LegalComplianceOutput)
+
+        country = legal_data.country
+        raw_new_rate = float(legal_data.new_rate)
 
         # The legal agent may return rates either as percentages (e.g. 5 for 5%)
         # or as decimals (e.g. 0.05). We normalize to:
@@ -73,8 +77,8 @@ Legislative Context:
         print(f"  Normalized decimal (for calculations): {new_rate_decimal}")
         print(f"  Display rate (for UI): {display_new_rate}%")
 
-        summary = legal_json.get("summary", "")
-        legal_conf = float(legal_json.get("confidence", 0.7))
+        summary = legal_data.summary
+        legal_conf = float(legal_data.confidence)
 
         # ==================================================
         # 3️⃣ Payroll Agent
@@ -89,36 +93,58 @@ Legislative Context:
             payroll_agent,
             input=[{"role": "user", "content": payroll_input}],
         )
-        payroll_raw = payroll_result.final_output_as(str)
-        payroll_json = json.loads(payroll_raw)
-        payroll_conf = float(payroll_json.get("confidence", 0.7))
-        payroll_action_required = payroll_json.get("payroll_action_required", "")
-        requires_system_update = payroll_json.get("requires_system_update")
-        employee_recalculation_required = payroll_json.get("employee_recalculation_required")
+        payroll_data = payroll_result.final_output_as(PayrollAgentOutput)
+
+        payroll_conf = float(payroll_data.confidence)
+        payroll_action_required = payroll_data.payroll_action_required
+        requires_system_update = payroll_data.requires_system_update
+        employee_recalculation_required = payroll_data.employee_recalculation_required
+
+        print(f"\n[DEBUG] Payroll Agent Output:")
+        print(f"  Action Required: {payroll_action_required}")
+        print(f"  Requires System Update: {requires_system_update}")
+        print(f"  Employee Recalculation Required: {employee_recalculation_required}")
+        print(f"  Confidence: {payroll_conf}")
+        print(f"  Urgency: {payroll_data.urgency}")
 
         # ==================================================
         # 4️⃣ Fetch Latest Legislation ID from DB
         # ==================================================
         legislation_id = None
         with get_db() as (conn, cursor):
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id FROM legislation
                 WHERE country = %s
                 ORDER BY effective_date DESC
                 LIMIT 1
-            """, (country,))
+            """,
+                (country,),
+            )
             row = cursor.fetchone()
             if row:
                 legislation_id = row["id"]
                 print(f"\n[DEBUG] Found existing legislation ID: {legislation_id}")
             else:
-                print(f"\n[DEBUG] No existing legislation found for {country}, creating new record...")
+                print(
+                    f"\n[DEBUG] No existing legislation found for {country}, creating new record..."
+                )
                 # Create a new legislation record
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO legislation (country, regulation_type, previous_rate, new_rate, effective_date, category, summary)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (country, 'auto_detected', 0, new_rate_decimal, legal_json.get('effective_date', '2024-01-01'), 
-                      legal_json.get('category', 'General'), summary))
+                """,
+                    (
+                        country,
+                        "auto_detected",
+                        0,
+                        new_rate_decimal,
+                        legal_data.effective_date,
+                        legal_data.category,
+                        summary,
+                    ),
+                )
                 legislation_id = cursor.lastrowid
                 print(f"[DEBUG] Created new legislation ID: {legislation_id}")
 
@@ -128,7 +154,7 @@ Legislative Context:
         impact_data = {
             "impacted_employees": 0,
             "annual_cost_increase": 0,
-            "employee_rows": []
+            "employee_rows": [],
         }
 
         print(f"\n[DEBUG] About to calculate impact:")
@@ -141,11 +167,15 @@ Legislative Context:
             impact_data = calculate_impact(
                 country=country,
                 new_rate=new_rate_decimal,
-                legislation_id=legislation_id
+                legislation_id=legislation_id,
             )
-            print(f"[DEBUG] Impact calculation complete: {impact_data.get('impacted_employees', 0)} employees impacted")
+            print(
+                f"[DEBUG] Impact calculation complete: {impact_data.get('impacted_employees', 0)} employees impacted"
+            )
         else:
-            print(f"[DEBUG] Skipping impact calculation - missing new_rate_decimal or legislation_id")
+            print(
+                f"[DEBUG] Skipping impact calculation - missing new_rate_decimal or legislation_id"
+            )
 
         impacted_count = impact_data.get("impacted_employees", 0)
         annual_cost = impact_data.get("annual_cost_increase", 0)
@@ -157,52 +187,64 @@ Legislative Context:
         risk_input = f"""
         Legal Summary: {summary}
         New Rate (%): {display_new_rate}
-        Payroll Urgency: {payroll_json.get('urgency')}
+        Payroll Urgency: {payroll_data.urgency}
         Impacted Employees: {impacted_count}
         Annual Cost Increase: {annual_cost}
+        Legislation ID: {legislation_id if legislation_id else "NOT AVAILABLE - do not call log_risk_to_db"}
         """
 
         risk_result = await Runner.run(
             risk_agent,
             input=[{"role": "user", "content": risk_input}],
         )
-        risk_raw = risk_result.final_output_as(str)
-        risk_json = json.loads(risk_raw)
-        risk_conf = float(risk_json.get("confidence", 0.7))
-        risk_reasoning = risk_json.get("reasoning", "")
+        risk_data = risk_result.final_output_as(RiskAgentOutput)
+        risk_conf = float(risk_data.confidence)
+        risk_reasoning = risk_data.reasoning
 
-        if legislation_id:
-            log_risk_to_db(legislation_id, risk_json)
+        print(f"\n[DEBUG] Risk Agent Output:")
+        print(f"  Risk Level: {risk_data.risk_level}")
+        print(f"  Reasoning: {risk_reasoning}")
+        print(f"  Confidence: {risk_conf}")
+        print(
+            f"  Legislation ID for DB logging: {legislation_id if legislation_id else 'NOT AVAILABLE - log_risk_to_db will be skipped'}"
+        )
+
+        # DB logging is handled by the risk agent via the log_risk_to_db tool
 
         # ==================================================
         # 7️⃣ Urgency Classification Agent
         # ==================================================
-        effective_date = legal_json.get("effective_date", "")
+        effective_date = legal_data.effective_date
         days_until_effective = 0
-        
+
         if effective_date:
             try:
                 eff_date = datetime.strptime(effective_date, "%Y-%m-%d")
                 days_until_effective = (eff_date - datetime.now()).days
             except:
                 days_until_effective = 30  # Default assumption
-        
+
         urgency_input = f"""
-        Effective Date: {effective_date}
-        Days Until Effective: {days_until_effective}
+        Effective Date: {effective_date.strftime('%Y-%m-%d') if hasattr(effective_date, 'strftime') else effective_date}
+        Risk Level: {risk_data.risk_level}
         Impacted Employees: {impacted_count}
         Annual Cost Increase: {annual_cost}
-        Risk Level: {risk_json.get('risk_level')}
-        Country: {country}
+        Legal Summary: {summary}
         """
 
         urgency_result = await Runner.run(
             urgency_agent,
             input=[{"role": "user", "content": urgency_input}],
         )
-        urgency_raw = urgency_result.final_output_as(str)
-        urgency_json = json.loads(urgency_raw)
-        urgency_conf = float(urgency_json.get("confidence", 0.7))
+        urgency_data = urgency_result.final_output_as(UrgencyAgentOutput)
+        urgency_conf = float(urgency_data.confidence)
+
+        print(f"\n[DEBUG] Urgency Agent Output:")
+        print(f"  Urgency Level: {urgency_data.urgency_level}")
+        print(f"  Days Until Effective: {urgency_data.days_until_effective}")
+        print(f"  Recommended Action: {urgency_data.recommended_action}")
+        print(f"  Reasoning: {urgency_data.reasoning}")
+        print(f"  Confidence: {urgency_data.confidence}")
 
         # ==================================================
         # 8️⃣ Report Generation Agent
@@ -214,8 +256,8 @@ Legislative Context:
         Effective Date: {effective_date}
         Impacted Employees: {impacted_count}
         Annual Cost Increase: {annual_cost}
-        Risk Level: {risk_json.get('risk_level')}
-        Urgency: {urgency_json.get('urgency_level')}
+        Risk Level: {risk_data.risk_level}
+        Urgency: {urgency_data.urgency_level}
         Days Until Effective: {days_until_effective}
         Payroll Action Required: {payroll_action_required}
         Risk Reasoning: {risk_reasoning}
@@ -233,9 +275,16 @@ Legislative Context:
         # 9️⃣ Aggregate Confidence
         # ==================================================
         final_conf = round(
-            (legal_conf + payroll_conf + risk_conf + urgency_conf + report_conf) / 5,
-            2
+            (legal_conf + payroll_conf + risk_conf + urgency_conf + report_conf) / 5, 2
         )
+
+        print(f"\n[DEBUG] Confidence Scores:")
+        print(f"  Legal Agent Confidence: {legal_conf}")
+        print(f"  Payroll Agent Confidence: {payroll_conf}")
+        print(f"  Risk Agent Confidence: {risk_conf}")
+        print(f"  Urgency Agent Confidence: {urgency_conf}")
+        print(f"  Report Agent Confidence: {report_conf}")
+        print(f"  Final Aggregated Confidence: {final_conf}")
 
         # ==================================================
         # 🔟 Generate CSV
@@ -250,11 +299,13 @@ Legislative Context:
         # 1️⃣1️⃣ Build Comprehensive Recommendations
         # ==================================================
         action_items = report_json.get("action_items", [])
-        action_summary = "\n".join([
-            f"• {item.get('action', '')} (Priority: {item.get('priority', '')}, Timeline: {item.get('timeline', '')})"
-            for item in action_items
-        ])
-        
+        action_summary = "\n".join(
+            [
+                f"• {item.get('action', '')} (Priority: {item.get('priority', '')}, Timeline: {item.get('timeline', '')})"
+                for item in action_items
+            ]
+        )
+
         recommendations = f"""
 EXECUTIVE SUMMARY:
 {report_json.get('executive_summary', '')}
@@ -272,9 +323,9 @@ RECOMMENDED ACTIONS:
 {action_summary}
 
 URGENCY ASSESSMENT:
-Level: {urgency_json.get('urgency_level', '')}
-Timeline: {urgency_json.get('recommended_action_timeline', '')}
-Reasoning: {urgency_json.get('reasoning', '')}
+Level: {urgency_data.urgency_level}
+Recommended Action: {urgency_data.recommended_action}
+Reasoning: {urgency_data.reasoning}
 """
 
         # ==================================================
@@ -289,11 +340,11 @@ Reasoning: {urgency_json.get('reasoning', '')}
             "impacted_employees": impacted_count,
             "annual_cost_increase": annual_cost,
             "monthly_cost_increase": round(annual_cost / 12, 2) if annual_cost else 0,
-            "payroll_urgency": payroll_json.get("urgency"),
-            "urgency_level": urgency_json.get("urgency_level"),
-            "urgency_reasoning": urgency_json.get("reasoning"),
-            "recommended_action_timeline": urgency_json.get("recommended_action_timeline"),
-            "risk_level": risk_json.get("risk_level"),
+            "payroll_urgency": payroll_data.urgency,
+            "urgency_level": urgency_data.urgency_level,
+            "urgency_reasoning": urgency_data.reasoning,
+            "recommended_action_timeline": urgency_data.recommended_action,
+            "risk_level": risk_data.risk_level,
             "confidence": final_conf,
             "employee_rows": employee_rows,
             "csv_path": csv_path,
@@ -338,15 +389,16 @@ def run_compliance_flow(user_input: str):
     return asyncio.run(run_compliance_flow_async(user_input))
 
 
-
-async def execute_compliance_actions_async(compliance_result: dict, auto_execute: bool = False):
+async def execute_compliance_actions_async(
+    compliance_result: dict, auto_execute: bool = False
+):
     """
     Executes recommended compliance actions using the Action Execution Agent.
-    
+
     Args:
         compliance_result: Result from run_compliance_flow_async
         auto_execute: If True, automatically execute high-priority actions
-    
+
     Returns:
         Dictionary with execution results
     """
@@ -358,61 +410,69 @@ async def execute_compliance_actions_async(compliance_result: dict, auto_execute
         action_items = compliance_result.get("action_items", [])
         new_rate = compliance_result.get("new_rate", 0) / 100  # Convert to decimal
         effective_date = compliance_result.get("effective_date", "")
-        
+
         # Determine if auto-execution should proceed
-        should_auto_execute = auto_execute and (risk_level in ["High", "Critical"] or urgency_level in ["High", "Critical"])
-        
+        should_auto_execute = auto_execute and (
+            risk_level in ["High", "Critical"] or urgency_level in ["High", "Critical"]
+        )
+
         print(f"\n[DEBUG] Executing compliance actions...")
         print(f"  Country: {country}")
         print(f"  Risk: {risk_level}, Urgency: {urgency_level}")
         print(f"  Legislation ID: {legislation_id}")
-        
+
         # Execute actions directly - use the plain functions
-        from app.tools.action_tools import (
-            _update_payroll_config,
-            _notify_payroll_team
-        )
-        
+        from app.tools.action_tools import _update_payroll_config, _notify_payroll_team
+
         execution_results = []
-        
+
         # 1. Update payroll configuration
         try:
             result = _update_payroll_config(
                 country=country,
                 new_rate=new_rate,
                 effective_date=effective_date,
-                regulation_type="pension"
+                regulation_type="pension",
             )
             execution_results.append(result)
             print(f"  ✅ {result}")
         except Exception as e:
             execution_results.append(f"❌ Payroll config update failed: {e}")
             print(f"  ❌ Payroll config failed: {e}")
-        
+
         # 2. Notify payroll team
         try:
             result = _notify_payroll_team(
                 country=country,
                 subject=f"Critical Compliance Update: {country} Pension Rate Change",
                 message=f"The pension contribution rate for {country} will change to {new_rate*100}% effective {effective_date}. Immediate action required.",
-                urgency=urgency_level or "High"
+                urgency=urgency_level or "High",
             )
             execution_results.append(result)
             print(f"  ✅ {result}")
         except Exception as e:
             execution_results.append(f"❌ Notification failed: {e}")
             print(f"  ❌ Notification failed: {e}")
-        
+
         # 3. Create compliance ticket - inline implementation
         try:
             with get_db() as (conn, cursor):
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO compliance_tickets
                     (title, description, country, priority, due_date, status, created_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (f"{country} Pension Rate Update to {new_rate*100}%",
-                      f"Update employer pension contribution rate to {new_rate*100}% effective {effective_date}",
-                      country, risk_level or "High", effective_date, 'open', datetime.now()))
+                """,
+                    (
+                        f"{country} Pension Rate Update to {new_rate*100}%",
+                        f"Update employer pension contribution rate to {new_rate*100}% effective {effective_date}",
+                        country,
+                        risk_level or "High",
+                        effective_date,
+                        "open",
+                        datetime.now(),
+                    ),
+                )
                 ticket_id = cursor.lastrowid
             result = f"✓ Compliance ticket created: #{ticket_id}"
             execution_results.append(result)
@@ -420,65 +480,93 @@ async def execute_compliance_actions_async(compliance_result: dict, auto_execute
         except Exception as e:
             execution_results.append(f"❌ Ticket creation failed: {e}")
             print(f"  ❌ Ticket creation failed: {e}")
-        
+
         # 4. Log audit entry
         if legislation_id:
             try:
                 with get_db() as (conn, cursor):
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO audit_log
                         (legislation_id, action_type, action_details, performed_by, timestamp)
                         VALUES (%s, %s, %s, %s, %s)
-                    """, (legislation_id, "compliance_actions_executed",
-                          f"Executed compliance actions for {country} pension rate change to {new_rate*100}%",
-                          "system", datetime.now()))
+                    """,
+                        (
+                            legislation_id,
+                            "compliance_actions_executed",
+                            f"Executed compliance actions for {country} pension rate change to {new_rate*100}%",
+                            "system",
+                            datetime.now(),
+                        ),
+                    )
                 result = f"✓ Audit entry logged for legislation #{legislation_id}"
                 execution_results.append(result)
                 print(f"  ✅ {result}")
             except Exception as e:
                 execution_results.append(f"❌ Audit logging failed: {e}")
                 print(f"  ❌ Audit logging failed: {e}")
-        
+
         # 5. Generate executive PDF
         if legislation_id:
             try:
-                report_data = json.dumps({
-                    "legislation_id": legislation_id,
-                    "country": country,
-                    "new_rate": new_rate,
-                    "impacted_employees": compliance_result.get("impacted_employees", 0),
-                    "annual_cost_increase": compliance_result.get("annual_cost_increase", 0),
-                    "risk_level": risk_level,
-                    "urgency_level": urgency_level
-                })
+                report_data = json.dumps(
+                    {
+                        "legislation_id": legislation_id,
+                        "country": country,
+                        "new_rate": new_rate,
+                        "impacted_employees": compliance_result.get(
+                            "impacted_employees", 0
+                        ),
+                        "annual_cost_increase": compliance_result.get(
+                            "annual_cost_increase", 0
+                        ),
+                        "risk_level": risk_level,
+                        "urgency_level": urgency_level,
+                    }
+                )
                 with get_db() as (conn, cursor):
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO generated_reports
                         (legislation_id, report_type, report_data, generated_at, file_path)
                         VALUES (%s, %s, %s, %s, %s)
-                    """, (legislation_id, 'executive_pdf', report_data, datetime.now(),
-                          f"reports/executive_report_{legislation_id}_{datetime.now().strftime('%Y%m%d')}.pdf"))
+                    """,
+                        (
+                            legislation_id,
+                            "executive_pdf",
+                            report_data,
+                            datetime.now(),
+                            f"reports/executive_report_{legislation_id}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                        ),
+                    )
                 result = f"✓ Executive PDF report generated"
                 execution_results.append(result)
                 print(f"  ✅ {result}")
             except Exception as e:
                 execution_results.append(f"❌ PDF generation failed: {e}")
                 print(f"  ❌ PDF generation failed: {e}")
-        
+
         # 6. Schedule compliance review
         try:
             from datetime import timedelta
+
             review_date = datetime.now() + timedelta(days=7)
             with get_db() as (conn, cursor):
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO scheduled_meetings
                     (title, meeting_date, attendees, agenda, created_at, status)
                     VALUES (%s, %s, %s, %s, %s, %s)
-                """, (f"{country} Compliance Review Meeting",
-                      review_date.strftime("%Y-%m-%d %H:%M"),
-                      "Payroll Team, HR Manager, Finance Director",
-                      f"Review {country} pension rate change impact and implementation plan",
-                      datetime.now(), 'scheduled'))
+                """,
+                    (
+                        f"{country} Compliance Review Meeting",
+                        review_date.strftime("%Y-%m-%d %H:%M"),
+                        "Payroll Team, HR Manager, Finance Director",
+                        f"Review {country} pension rate change impact and implementation plan",
+                        datetime.now(),
+                        "scheduled",
+                    ),
+                )
                 meeting_id = cursor.lastrowid
             result = f"✓ Compliance review meeting scheduled: #{meeting_id}"
             execution_results.append(result)
@@ -486,7 +574,7 @@ async def execute_compliance_actions_async(compliance_result: dict, auto_execute
         except Exception as e:
             execution_results.append(f"❌ Meeting scheduling failed: {e}")
             print(f"  ❌ Meeting scheduling failed: {e}")
-        
+
         return {
             "status": "success",
             "auto_executed": should_auto_execute,
@@ -497,23 +585,22 @@ async def execute_compliance_actions_async(compliance_result: dict, auto_execute
                 "Compliance ticket created",
                 "Audit entry logged",
                 "Executive report generated",
-                "Compliance review scheduled"
-            ]
+                "Compliance review scheduled",
+            ],
         }
-        
+
     except Exception as e:
         print(f"\n[ERROR] Action execution failed: {e}")
         import traceback
+
         traceback.print_exc()
-        return {
-            "status": "error",
-            "error": str(e),
-            "auto_executed": False
-        }
+        return {"status": "error", "error": str(e), "auto_executed": False}
 
 
 def execute_compliance_actions(compliance_result: dict, auto_execute: bool = False):
     """
     Synchronous wrapper for action execution.
     """
-    return asyncio.run(execute_compliance_actions_async(compliance_result, auto_execute))
+    return asyncio.run(
+        execute_compliance_actions_async(compliance_result, auto_execute)
+    )
